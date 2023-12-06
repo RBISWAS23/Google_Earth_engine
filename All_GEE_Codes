@@ -1,19 +1,37 @@
 //////////////////////////////////////////////////      FCC 5,4,3       //////////////////////////////////////////////////////////////
 var landsat_wls = L5.filterBounds(WLS).filterMetadata('CLOUD_COVER','less_than', 5).filterDate('2011-01-01','2011-05-01').mean().clip(WLS);
-Map.addLayer(landsat_wls, {}, 'WLS_2001');
 
 // Create a Map centered on the ROI
 // Map.centerObject(landsat_wls, 15); // Replace 'zoom' with your desired zoom level (e.g., 10)
 
 // Add the ROI to the map
 // Map.addLayer(landsat_wls, {}, 'Study Area');
+//////////////////////////////////////////////////  Slope Reclaassificatoon   ////////////////////////////////////////////////////////////////
+/Get elevation from SRTM
+var elv = SRTM.select('elevation');
 
-//Borpeta test image 
-//var landsat_borpeta = Landsat_9.filterBounds(Barpeta).filterMetadata('CLOUD_COVER','less_than', 5).filterDate('2022-01-01','2022-02-28').mean().clip(Barpeta);
+//Get slope
+var slope = ee.Terrain.slope(SRTM);
 
-/////////////////////////////////////////////////       FCC 6,5,4       /////////////////////////////////////////////////////////////////
+//Clip SRTM DEM by AOI
+var Slope_Darjeeling = slope.clip(Darjeeling_Taluka);
 
-//var landsat_purbasthali = Landsat_9.filterBounds(new_area).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(new_area);
+//Display The Map
+Map.addLayer(Slope_Darjeeling, {min:0, max:60}, 'Slope Darjeeling');
+
+//Remap slope clas/reclassification function
+var SlopeReClass = ee.Image(1) // In my case i will reclass slope into 5 clesses
+                  .where(Slope_Darjeeling.gt(5).and(Slope_Darjeeling.lte(20)),2)     // gt: greater than and lts: less than or equal to
+                  .where(Slope_Darjeeling.gt(20).and(Slope_Darjeeling.lte(35)),3)
+                  .where(Slope_Darjeeling.gt(35).and(Slope_Darjeeling.lte(50)),4)  
+                  .where(Slope_Darjeeling.gt(50).and(Slope_Darjeeling.lte(65)),5);
+                  
+// Define Colors/Palettes 
+// color codes: 
+var slope_plette = ['FFFFFF','C0C0C0','808080','000000','800000'];
+                  
+// Display Reclassified slope image 
+Map.addLayer(SlopeReClass.clip(Darjeeling_Taluka), {min:1, max:7, palette:slope_plette}, 'Reclassified Slope Darjeeling');             
 
 //////////////////////////////////////////////////  Supervised Learning   ////////////////////////////////////////////////////////////////    
 // // STEP 1:Filtering the data according to my AOI
@@ -34,8 +52,25 @@ Map.addLayer(landsat_wls, {}, 'WLS_2001');
 // // // Classify the image using ML model "classification"
 // var LULC=landsat_wls.classify(classification);
 
-
 // Map.addLayer(LULC, {}, 'Supervised Classification');
+
+//////////////////////////////////////////////////  HillShade   ////////////////////////////////////////////////////////////////
+Map.centerObject(Amsterdam, 7)
+var Amsterdam_DEM = DEM.clip(Amsterdam);
+
+var hillshade = ee.Terrain.hillshade(Amsterdam_DEM, 315,10);
+var hillshade_1 = ee.Terrain.hillshade(Amsterdam_DEM, 315,45);
+var hillshade_2 = ee.Terrain.hillshade(Amsterdam_DEM, 315,90);
+var hillshade_3 = ee.Terrain.hillshade(Amsterdam_DEM, 135,45);
+var hillshade_4 = ee.Terrain.hillshade(Amsterdam_DEM, 135,10);
+
+
+// Map.addLayer(KALNA_DEM, {} , 'KALNA');
+Map.addLayer(hillshade, {} , 'Amsterdam_Hillshade');      
+Map.addLayer(hillshade_1, {} , 'Amsterdam_Hillshade_1'); 
+Map.addLayer(hillshade_2, {} , 'Amsterdam_Hillshade_2'); 
+Map.addLayer(hillshade_3, {} , 'Amsterdam_Hillshade_3'); 
+Map.addLayer(hillshade_4, {} , 'Amsterdam_Hillshade_4'); 
 
 /////////////////////////////////////////////////       NDVI Calculation       /////////////////////////////////////////////////////////////////
 // var landsat_purbasthali = Landsat_9.filterBounds(new_area).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(new_area);
@@ -67,4 +102,218 @@ Map.addLayer(landsat_wls, {}, 'WLS_2001');
 // var landsat_purbasthali = Landsat_9.filterBounds(Kolkata).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(Kolkata);
 // var NDBI =landsat_purbasthali.expression('(A-B)/(A+B)',{A:landsat_purbasthali.select('B6'),B:landsat_purbasthali.select('B5')});
 // Map.addLayer(NDBI, {} , 'PURBASTHALI');
-/////////////////////////////////////////////////       NDSI Calculation       /////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////       GIF Modis            /////////////////////////////////////////////////////////////////
+var col = ee.ImageCollection("MODIS/061/MOD13A2").select('NDVI');
+Map.addLayer(South_24_Parganas)
+
+// step:2 define the date & year from chossen data
+col = col.map(function(img){
+  var doy = ee.Date(img.get('system:time_start')).getRelative('day','year');
+  return img.set('doy',doy)
+});
+var distinctdoy = col.filterDate('2022-01-01','2023-01-01');
+
+// step 3: defining and filtering the image from distincdy that matches with original data.
+var filter = ee.Filter.equals({leftField: 'doy', rightField: 'doy'});
+
+// step 4: we need to use function that will attach all images togethwe to generate GIF image
+var join = ee.Join.saveAll('doy_matches');
+
+// step 5: join features are feature collections from overall MODIS data. now lets convert.
+//  from feature collection to image collection
+var joincol = ee.ImageCollection(join.apply(distinctdoy,col,filter));
+
+// step 6: apply median reduction to create one output per month, same as how we layer stack FCC image
+var comp = joincol.map(function(img){
+var doycol = ee.ImageCollection.fromImages(img.get('doy_matches'))
+  return doycol.reduce(ee.Reducer.median());
+});
+
+// step 7: now we define visualitation parameters
+var visparms = {
+  min:0.0,
+  max:9000.0,
+  palette: ['FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718', '74A901',
+    '66A000', '529400', '3E8601', '207401', '056201', '004C00', '023B01',
+    '012E01', '011D01', '011301'],
+};
+// STEP 8: Creating RBG visualization image to used in creating GIF output
+var RGBVIS = comp.map(function(img){
+  return img.visualize(visparms).clip(South_24_Parganas);
+});
+// step 9: define GIF visualization parameters
+var gifparams = {
+  'region':S_24_Parganas_boundary,
+  'dimensions' : 600,
+  'crs': 'EPSG:7779',
+  'framespersecond':10,
+};
+
+// step 10: creating and displaying the output
+print(RGBVIS.getVideoThumbURL(gifparams));
+
+// reminder the GIF animation in the console
+print(ui.Thumbnail(RGBVIS, gifparams));
+/////////////////////////////////////////////////      Cyclone Map  GPM          /////////////////////////////////////////////////////////////////
+Map.addLayer(study_area,{}, "AOI")
+
+var cyclone = gpm.filterBounds(study_area).filterDate('2023-06-06','2023-06-19').sum().clip(study_area);
+
+var range = ee.Date('2023-06-19').getRange("day"); // we have to change the dates only 
+var dataset = gpm.filter(ee.Filter.date(range));
+var precipitation =  dataset.select('precipitationCal').max();
+// For cyclone mapping we need mask out the lower precipitation data
+// display only higher precipitation region
+
+var precipitation_mask = precipitation.gt(0.5);
+var output = precipitation.updateMask(precipitation_mask).clip(study_area)
+var palette = [
+  '000096','0064ff', '00b4ff', '33db80', '9beb4a',
+  'ffeb00', 'ffb300', 'ff6400', 'eb1e00', 'af0000'
+];
+var vis_params = {min:0.0,max:15.0,palette:palette}
+Map.addLayer(output,vis_params, "cyclone_biparjoy on 19th June 2023")
+Map.centerObject(study_area,5)
+//----------------------------------    Cyclone GIF     ----------------------------------
+var joincol = ee.ImageCollection([]); 
+var palette_c = [
+  '000096','0064ff', '00b4ff', '33db80', '9beb4a',
+  'ffeb00', 'ffb300', 'ff6400', 'eb1e00', 'af0000'
+];
+
+var visparams = {min:0.0, max:15.0, palette:palette_c};
+var year = 2023
+
+for (var day = 1; day <= 20; day++) {
+var startDay = year + '-' + '06' +'-'+ (day < 10 ? '0' : '') + day;
+var endDay = year + '-' + '06' + '-' + (day < 10 ? '0' : '') + day;
+var filtered = gpm.filterBounds(study_area).filterDate(startDay,endDay).sum().clip(study_area)
+var range = ee.Date(startDay).getRange('day')
+var dataset = gpm.filter(ee.Filter.date(range))
+
+// selecting one data i.e., precipitation form all dataset of dataset
+//for cyclone mapping using the gpm data we need to mask out low precipitation region and
+// display only higher precipitation region
+var precipitation = dataset.select('precipitationCal').max();  //showing all value of precipitation
+var final_precipitation = precipitation.gt(0.5);
+var output = precipitation.updateMask(final_precipitation).clip(study_area)
+
+joincol = joincol.merge(output);
+//Map.addLayer(output,visparams,'cyclone_Biporjoy')
+Map.centerObject(study_area,5)
+
+}
+//step 8: creating RGB visualization image to be used in creating GIF Output
+var RGBVIS = joincol.map(function(img){
+  return img.visualize(visparams).clip(study_area);
+});
+
+//Step 9: define GIF visualisation paprameters
+var gifparams = {
+  'region':study_area,
+  'dimensions': 600,
+  'crs':'EPSG:7773',
+  'framespersecond': 1
+};
+
+// Step 10 Creating and displaying the output
+print(RGBVIS.getVideoThumbURL(gifparams));
+print(ui.Thumbnail(RGBVIS,gifparams))
+//Export.video(RGBVIS,'cyclone',gifparams)
+/////////////////////////////////////////////////      LST Chart         /////////////////////////////////////////////////////////////////
+// STEP 1: Add modis data and state shapefile 
+Map.centerObject(AOI, 10)
+Map.addLayer(AOI, {}, 'West Bengal')
+
+// STEP 2: filtering the date for the required time period
+var start = ee.Date('2023-01-01')
+var range = ee.DateRange(start, start.advance(1, 'year'));
+
+// STEP 3: filtering the particular variable from MODIS
+var LST1 = modis.filterDate(range)
+var LST_WB = LST1.select('LST_Day_1km')
+
+// STEP 4: Convert Kelvin to Degree Celsius
+var temp_celsius = LST_WB.map(function(img){
+  return img
+  .multiply(0.02)
+  .subtract(273.15)
+  .copyProperties(img,['system:time_start'])
+})
+
+// Adding the chart. The chart is being developed for two variables 
+// mean temp and minmax temp for the AOI
+var mean_temp = ui.Chart.image.series({
+  imageCollection: temp_celsius,
+  region: AOI,
+  reducer: ee.Reducer.mean(),
+  scale: 1000,
+  xProperty: 'system:time_start',
+}).setOptions({
+  title: 'Mean LST 2023',
+  vAxis: {title: 'Celsius'}
+})
+
+var mM_temp = ui.Chart.image.series({
+  imageCollection: temp_celsius,
+  region: AOI,
+  reducer: ee.Reducer.minMax(),
+  scale: 1000,
+  xProperty: 'system:time_start',
+}).setOptions({
+  title: 'Mean LST 2023',
+  vAxis: {title: 'Celsius'}
+})
+
+print(mean_temp)
+print(mM_temp)
+
+//----------------------------- Visualizing LST map ----------------------------------------------
+// STEP 1: Add MODIS data and state shapefile
+Map.centerObject(AOI, 10);
+Map.addLayer(AOI, {}, 'West Bengal');
+
+// STEP 2: Define the date ranges for the years 2001, 2010, and 2023
+var startDate2001 = ee.Date('2001-01-01');
+var endDate2001 = ee.Date('2001-12-31');
+
+var startDate2010 = ee.Date('2010-01-01');
+var endDate2010 = ee.Date('2010-12-31');
+
+var startDate2023 = ee.Date('2023-01-01');
+var endDate2023 = ee.Date('2023-12-31');
+
+// STEP 3: Filtering MODIS data for the required time periods
+var LST2001 = modis.filterDate(startDate2001, endDate2001).select('LST_Day_1km'); //open modis data to know more about 'LST_Day_1km'
+var LST2010 = modis.filterDate(startDate2010, endDate2010).select('LST_Day_1km'); //open modis data to know more about 'LST_Day_1km'
+var LST2023 = modis.filterDate(startDate2023, endDate2023).select('LST_Day_1km'); //open modis data to know more about 'LST_Day_1km'
+
+// STEP 4: Convert Kelvin to Degree Celsius for all three years
+var toCelsius = function (image) {
+  return image
+    .multiply(0.02)
+    .subtract(273.15)
+    .copyProperties(image, ['system:time_start']);
+};
+
+var tempCelsius2001 = LST2001.map(toCelsius);
+var tempCelsius2010 = LST2010.map(toCelsius);
+var tempCelsius2023 = LST2023.map(toCelsius);
+
+// Reduce the ImageCollection to a single image (e.g., by taking the mean)
+var singleImage2001 = tempCelsius2001.mean();
+var singleImage2010 = tempCelsius2010.mean();
+var singleImage2023 = tempCelsius2023.mean();
+
+// Clip the images to the AOI
+singleImage2001 = singleImage2001.clip(AOI);
+singleImage2010 = singleImage2010.clip(AOI);
+singleImage2023 = singleImage2023.clip(AOI);
+
+// Display mean LST maps for the three years
+Map.addLayer(singleImage2001, {
+  min: 0,
+  max: 40,
+  palette: ['green', 'blue', 'red']
+}, 'Mean LST 2001');
+
