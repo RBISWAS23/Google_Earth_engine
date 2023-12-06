@@ -1,0 +1,34 @@
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//***********************************************Supervised Learning******************************************************
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// STEP 1:Filtering the data according to my AOI
+var landsat_wls = L8.filterBounds(wls).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2021-01-01','2021-04-01').mean().clip(wls);
+
+// Map.addLayer(landsat_wls, {}, 'AOI');
+
+// STEP 2:Mearging the collected samples & CLASS 
+var training_points= Forest.merge(Barren_Land);
+
+// // STEP 3:Importing sample points into FCC image 
+var train_data = landsat_wls.sampleRegions({collection:training_points, properties:['CLASS'], scale:30 });
+
+// // STEP 4:Defining ML model
+var ML = ee.Classifier.smileCart();
+
+// // STEP 5:Defining the ML model for the training data & the image 
+var classification= ML.train(train_data, 'CLASS', ['B7','B6','B4']);
+
+// // Classify the image using ML model "classification"
+var LULC=landsat_wls.classify(classification);
+
+// Load the output
+Map.addLayer(LULC, {}, 'Supervised Classification');
+
+// // // Export 
+// // Export.image.toDrive({
+// //   image: LULC,
+// //   description:'Barpeta_2022_LULC',
+// //   scale: 30,
+// //   region: Barpeta
+// // })
