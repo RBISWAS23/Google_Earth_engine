@@ -1,34 +1,70 @@
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//***********************************************Supervised Learning******************************************************
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////      FCC 5,4,3       //////////////////////////////////////////////////////////////
+var landsat_wls = L5.filterBounds(WLS).filterMetadata('CLOUD_COVER','less_than', 5).filterDate('2011-01-01','2011-05-01').mean().clip(WLS);
+Map.addLayer(landsat_wls, {}, 'WLS_2001');
 
-// STEP 1:Filtering the data according to my AOI
-var landsat_wls = L8.filterBounds(wls).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2021-01-01','2021-04-01').mean().clip(wls);
+// Create a Map centered on the ROI
+// Map.centerObject(landsat_wls, 15); // Replace 'zoom' with your desired zoom level (e.g., 10)
 
-// Map.addLayer(landsat_wls, {}, 'AOI');
+// Add the ROI to the map
+// Map.addLayer(landsat_wls, {}, 'Study Area');
 
-// STEP 2:Mearging the collected samples & CLASS 
-var training_points= Forest.merge(Barren_Land);
+//Borpeta test image 
+//var landsat_borpeta = Landsat_9.filterBounds(Barpeta).filterMetadata('CLOUD_COVER','less_than', 5).filterDate('2022-01-01','2022-02-28').mean().clip(Barpeta);
 
-// // STEP 3:Importing sample points into FCC image 
-var train_data = landsat_wls.sampleRegions({collection:training_points, properties:['CLASS'], scale:30 });
+/////////////////////////////////////////////////       FCC 6,5,4       /////////////////////////////////////////////////////////////////
 
-// // STEP 4:Defining ML model
-var ML = ee.Classifier.smileCart();
+//var landsat_purbasthali = Landsat_9.filterBounds(new_area).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(new_area);
 
-// // STEP 5:Defining the ML model for the training data & the image 
-var classification= ML.train(train_data, 'CLASS', ['B7','B6','B4']);
+//////////////////////////////////////////////////  Supervised Learning   ////////////////////////////////////////////////////////////////    
+// // STEP 1:Filtering the data according to my AOI
+// // var landsat_purbasthali = Landsat_7.filterBounds(AOI).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(new_area);
 
-// // Classify the image using ML model "classification"
-var LULC=landsat_wls.classify(classification);
+// // STEP 2:Mearging the collected samples & CLASS 
+// var training_points= Waterbody.merge(Agriculture).merge(Forest).merge(Builtup).merge(Barren_land);
 
-// Load the output
-Map.addLayer(LULC, {}, 'Supervised Classification');
+// // // STEP 3:Importing sample points into FCC image 
+// var train_data = landsat_wls.sampleRegions({collection:training_points, properties:['CLASS'], scale:30 });
 
-// // // Export 
-// // Export.image.toDrive({
-// //   image: LULC,
-// //   description:'Barpeta_2022_LULC',
-// //   scale: 30,
-// //   region: Barpeta
-// // })
+// // // STEP 4:Defining ML model
+// var ML = ee.Classifier.smileCart();
+
+// // // STEP 5:Defining the ML model for the training data & the image 
+// var classification= ML.train(train_data, 'CLASS', ['B7','B6','B3']);
+
+// // // Classify the image using ML model "classification"
+// var LULC=landsat_wls.classify(classification);
+
+
+// Map.addLayer(LULC, {}, 'Supervised Classification');
+
+/////////////////////////////////////////////////       NDVI Calculation       /////////////////////////////////////////////////////////////////
+// var landsat_purbasthali = Landsat_9.filterBounds(new_area).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(new_area);
+// var NDVI =landsat_purbasthali.normalizedDifference(['B5','B4']);
+
+// // to load the output 
+// Map.addLayer(NDVI, {} , 'PURBASTHALI');
+// Map.addLayer(landsat_purbasthali, FCC, 'PURBASTHALI');
+
+/////////////////////////////////////////////////       Export the data       /////////////////////////////////////////////////////////////////
+// landsat_9_purbasthali = landsat_9_purbasthali.toFloat(); // Use if you getting an error (Cast all bands to Float32)
+// Export.image.toDrive({
+//   image: NDVI,
+//   description:'NDVI Image of Purbasthali',
+//   scale: 30,
+//   region: new_area
+// })
+/////////////////////////////////////////////////       NDWI Calculation       /////////////////////////////////////////////////////////////////
+// var landsat_purbasthali = Landsat_9.filterBounds(new_area).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(new_area);
+// var NDWI =landsat_purbasthali.expression('(A-B)/(A+B)',{A:landsat_purbasthali.select('B3'),B:landsat_purbasthali.select('B5')});
+
+// to load the output 
+// Map.addLayer(NDWI, {} , 'PURBASTHALI');
+/////////////////////////////////////////////////       NDBI Calculation       /////////////////////////////////////////////////////////////////
+// var landsat_purbasthali = Landsat_9.filterBounds(Kolkata).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(Kolkata);
+// var NDBI =landsat_purbasthali.expression('(A-B)/(A+B)',{A:landsat_purbasthali.select('B6'),B:landsat_purbasthali.select('B5')});
+// Map.addLayer(NDBI, {} , 'PURBASTHALI');
+/////////////////////////////////////////////////       NDSI Calculation       /////////////////////////////////////////////////////////////////
+// var landsat_purbasthali = Landsat_9.filterBounds(Kolkata).filterMetadata('CLOUD_COVER','less_than', 10).filterDate('2023-04-01','2023-07-15').mean().clip(Kolkata);
+// var NDBI =landsat_purbasthali.expression('(A-B)/(A+B)',{A:landsat_purbasthali.select('B6'),B:landsat_purbasthali.select('B5')});
+// Map.addLayer(NDBI, {} , 'PURBASTHALI');
+/////////////////////////////////////////////////       NDSI Calculation       /////////////////////////////////////////////////////////////////
